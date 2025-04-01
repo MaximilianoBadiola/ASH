@@ -9,8 +9,12 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  url_launcher: ^6.1.11
+  url_launcher: ^6.1.12
   cupertino_icons: ^1.0.8
+  # Usamos el paquete oficial
+  flutter_sms: ^2.3.3
+  permission_handler: ^11.1.0
+  # Eliminamos flutter_local_notifications para evitar problemas de compilación
 
 dev_dependencies:
   flutter_test:

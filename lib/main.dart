@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_sms/flutter_sms.dart';
 import 'dart:async';
+import 'package:permission_handler/permission_handler.dart';
 
 void main() {
   runApp(const MyApp());
@@ -52,10 +54,8 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
-  static const platform = MethodChannel('com.example.sms_ash/sms');
-
   final TextEditingController _cantidadController = TextEditingController();
-  final String _numeroASH = "24200"; // Reemplazar con el número real
+  final String _numeroASH = "24200"; // Número de destino
   bool _enviando = false;
   int _donacionesCompletadas = 0;
   int _donacionesTotal = 0;
@@ -67,9 +67,6 @@ class _HomePageState extends State<HomePage>
   // Controlador de animación para el ícono
   late AnimationController _iconAnimationController;
   late Animation<double> _iconAnimation;
-
-  // Controlador para las animaciones de los mensajes
-  final GlobalKey _messageKey = GlobalKey();
 
   @override
   void initState() {
@@ -89,9 +86,6 @@ class _HomePageState extends State<HomePage>
 
     // Registrar el observer
     WidgetsBinding.instance.addObserver(this);
-
-    // Solicitar permisos al iniciar
-    _checkSmsPermission();
   }
 
   @override
@@ -102,44 +96,74 @@ class _HomePageState extends State<HomePage>
     super.dispose();
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      // Volver a verificar permisos cuando la app vuelve a primer plano
-      _checkSmsPermission();
-    }
-  }
-
-  Future<void> _checkSmsPermission() async {
+  // Método para verificar y solicitar permisos de SMS
+  Future<bool> _requestSmsPermission() async {
     try {
-      final hasPermission = await platform.invokeMethod('checkSmsPermission');
-      setState(() {
-        if (hasPermission == false) {
-          _estado = "Por favor, concede permisos de SMS cuando se soliciten";
-          _mostrarEstado = true;
-          _esError = true;
-        } else {
-          // Si tiene permisos, ocultar el mensaje de error si estaba relacionado con permisos
-          if (_esError && _estado.contains("permisos de SMS")) {
-            _mostrarEstado = false;
-          }
+      // Verificamos si tenemos permiso para enviar SMS
+      final status = await Permission.sms.status;
+
+      if (status.isGranted) {
+        return true;
+      }
+
+      // Mostrar diálogo explicando por qué necesitamos el permiso
+      if (context.mounted) {
+        final bool shouldRequest =
+            await showDialog(
+              context: context,
+              builder:
+                  (context) => AlertDialog(
+                    title: Text('Permiso necesario'),
+                    content: Text(
+                      'Para realizar donaciones, necesitamos permiso para enviar SMS automáticamente a Animales Sin Hogar.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: Text('Cancelar'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: Text('Continuar'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Theme.of(context).primaryColor,
+                        ),
+                      ),
+                    ],
+                  ),
+            ) ??
+            false;
+
+        if (!shouldRequest) {
+          return false;
         }
-      });
+      }
+
+      // Solicitamos permiso
+      final result = await Permission.sms.request();
+      return result.isGranted;
     } catch (e) {
-      print("Error verificando permisos: $e");
+      debugPrint("Error verificando permisos: $e");
+      return false;
     }
   }
 
-  // Método para enviar SMS usando el canal nativo
+  // Método para enviar SMS usando flutter_sms
   Future<bool> _sendSMS(String phoneNumber, String message) async {
     try {
-      final bool result = await platform.invokeMethod('sendSMS', {
-        'phoneNumber': phoneNumber,
-        'message': message,
-      });
-      return result;
-    } on PlatformException catch (e) {
-      print("Error al enviar SMS: ${e.message}");
+      // Usar sendSMS con sendDirect:true
+      final String result = await sendSMS(
+        message: message,
+        recipients: [phoneNumber],
+        sendDirect: true,
+      );
+
+      debugPrint("Resultado del envío de SMS: $result");
+
+      // Envío exitoso
+      return result.contains("sent") || result.contains("success");
+    } catch (e) {
+      debugPrint("Error al enviar SMS: $e");
       return false;
     }
   }
@@ -171,6 +195,17 @@ class _HomePageState extends State<HomePage>
       return;
     }
 
+    // Solicitar permiso de SMS antes de proceder
+    final hasPermission = await _requestSmsPermission();
+    if (!hasPermission) {
+      setState(() {
+        _estado = "Se requiere permiso para enviar SMS";
+        _mostrarEstado = true;
+        _esError = true;
+      });
+      return;
+    }
+
     setState(() {
       _enviando = true;
       _donacionesCompletadas = 0;
@@ -193,7 +228,7 @@ class _HomePageState extends State<HomePage>
         _esError = false;
       });
 
-      // Usar el método nativo para enviar SMS automáticamente
+      // Usar sendSMS para enviar el mensaje
       final result = await _sendSMS(_numeroASH, "DONAR");
 
       if (result) {
@@ -230,7 +265,7 @@ class _HomePageState extends State<HomePage>
         });
       }
     } catch (e) {
-      print("Error en donación: ${e.toString()}");
+      debugPrint("Error en donación: ${e.toString()}");
       setState(() {
         _estado = "Error: ${e.toString()}";
         _mostrarEstado = true;

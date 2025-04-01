@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <key>NSAppleMusicUsageDescription</key>
+    <string>Esta app necesita acceso para enviar SMS de donación a Animales Sin Hogar.</string>
+	<key>NSUserNotificationUsageDescription</key>
+    <string>La app enviará notificaciones para informarte sobre el estado de tus donaciones.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
