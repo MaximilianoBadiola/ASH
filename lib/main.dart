@@ -96,62 +96,10 @@ class _HomePageState extends State<HomePage>
     super.dispose();
   }
 
-  // Método para verificar y solicitar permisos de SMS
-  Future<bool> _requestSmsPermission() async {
-    try {
-      // Verificamos si tenemos permiso para enviar SMS
-      final status = await Permission.sms.status;
-
-      if (status.isGranted) {
-        return true;
-      }
-
-      // Mostrar diálogo explicando por qué necesitamos el permiso
-      if (context.mounted) {
-        final bool shouldRequest =
-            await showDialog(
-              context: context,
-              builder:
-                  (context) => AlertDialog(
-                    title: Text('Permiso necesario'),
-                    content: Text(
-                      'Para realizar donaciones, necesitamos permiso para enviar SMS automáticamente a Animales Sin Hogar.',
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, false),
-                        child: Text('Cancelar'),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        child: Text('Continuar'),
-                        style: TextButton.styleFrom(
-                          foregroundColor: Theme.of(context).primaryColor,
-                        ),
-                      ),
-                    ],
-                  ),
-            ) ??
-            false;
-
-        if (!shouldRequest) {
-          return false;
-        }
-      }
-
-      // Solicitamos permiso
-      final result = await Permission.sms.request();
-      return result.isGranted;
-    } catch (e) {
-      debugPrint("Error verificando permisos: $e");
-      return false;
-    }
-  }
-
   // Método para enviar SMS usando flutter_sms
   Future<bool> _sendSMS(String phoneNumber, String message) async {
     try {
-      // Usar sendSMS con sendDirect:true
+      // Usar sendSMS con sendDirect:true como en la documentación
       final String result = await sendSMS(
         message: message,
         recipients: [phoneNumber],
@@ -160,8 +108,16 @@ class _HomePageState extends State<HomePage>
 
       debugPrint("Resultado del envío de SMS: $result");
 
-      // Envío exitoso
-      return result.contains("sent") || result.contains("success");
+      // En lugar de buscar palabras específicas, consideramos cualquier resultado
+      // que no indique un error explícito como exitoso
+      // La mayoría de las APIs devuelven algún tipo de error si falla
+      bool isError =
+          result.toLowerCase().contains("error") ||
+          result.toLowerCase().contains("fail") ||
+          result.toLowerCase().contains("denied") ||
+          result.isEmpty;
+
+      return !isError;
     } catch (e) {
       debugPrint("Error al enviar SMS: $e");
       return false;
@@ -196,14 +152,18 @@ class _HomePageState extends State<HomePage>
     }
 
     // Solicitar permiso de SMS antes de proceder
-    final hasPermission = await _requestSmsPermission();
-    if (!hasPermission) {
-      setState(() {
-        _estado = "Se requiere permiso para enviar SMS";
-        _mostrarEstado = true;
-        _esError = true;
-      });
-      return;
+    final hasPermission = await Permission.sms.status;
+    if (!hasPermission.isGranted) {
+      // Solo solicitamos permiso si no está concedido
+      final result = await Permission.sms.request();
+      if (!result.isGranted) {
+        setState(() {
+          _estado = "Se requiere permiso para enviar SMS";
+          _mostrarEstado = true;
+          _esError = true;
+        });
+        return;
+      }
     }
 
     setState(() {
@@ -220,6 +180,13 @@ class _HomePageState extends State<HomePage>
   }
 
   Future<void> _iniciarDonacion() async {
+    if (_donacionesCompletadas >= _donacionesTotal || !_enviando) {
+      setState(() {
+        _enviando = false;
+      });
+      return;
+    }
+
     try {
       setState(() {
         _estado =
@@ -228,37 +195,47 @@ class _HomePageState extends State<HomePage>
         _esError = false;
       });
 
-      // Usar sendSMS para enviar el mensaje
+      // Esperamos un poco para asegurarnos de que cualquier diálogo del sistema tenga tiempo de mostrarse
+      // y el usuario pueda responder
+      await Future.delayed(Duration(milliseconds: 500));
+
+      // Enviar SMS sin reintentos
       final result = await _sendSMS(_numeroASH, "DONAR");
 
       if (result) {
         setState(() {
           _donacionesCompletadas++;
-
           // Animar el icono con cada donación exitosa
           _animateIcon();
+        });
 
-          if (_donacionesCompletadas < _donacionesTotal) {
+        if (_donacionesCompletadas < _donacionesTotal) {
+          setState(() {
             _estado = "Donación enviada correctamente. Preparando siguiente...";
             _mostrarEstado = true;
             _esError = false;
-            // Añadir un pequeño retraso entre mensajes
-            Future.delayed(Duration(milliseconds: 800), () {
-              if (_enviando) {
-                _iniciarDonacion();
-              }
-            });
-          } else {
+          });
+
+          // Añadir un retraso entre mensajes para permitir que cualquier diálogo del sistema se muestre
+          await Future.delayed(Duration(milliseconds: 2000));
+
+          // Verificar si debemos continuar
+          if (_enviando && mounted) {
+            _iniciarDonacion();
+          }
+        } else {
+          setState(() {
             _estado = "¡Gracias por colaborar!";
             _mostrarEstado = true;
             _esError = false;
             _exitoso = true;
             _enviando = false;
-          }
-        });
+          });
+        }
       } else {
         setState(() {
-          _estado = "Error al enviar el mensaje. Verifica los permisos de SMS.";
+          _estado =
+              "Error al enviar el mensaje. El sistema puede haber cancelado el envío o faltó confirmar el cargo.";
           _mostrarEstado = true;
           _esError = true;
           _enviando = false;

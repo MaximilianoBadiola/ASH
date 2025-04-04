@@ -1,0 +1,3 @@
+<resources>
+    <string name="permission_send_sms_description">Esta aplicación necesita acceso para enviar SMS para realizar donaciones automáticas a Animales Sin Hogar. Cada SMS enviado dona 10 pesos desde tu saldo de Antel.</string>
+</resources>

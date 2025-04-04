@@ -1,7 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Permisos para enviar SMS -->
-    <uses-permission android:name="android.permission.SEND_SMS"/>
+ <uses-permission 
+        android:name="android.permission.SEND_SMS"
+        android:permissionGroup="android.permission-group.SMS"
+        android:description="@string/permission_send_sms_description" />
     
     <application
         android:label="ASH"

@@ -1,4 +1,4 @@
-package com.example.sms_ash // Cambia esto para que coincida con tu paquete
+package com.ash.sms_ash // Cambia esto para que coincida con tu paquete
 
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -10,7 +10,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 
 class MainActivity: FlutterActivity() {
-    private val CHANNEL = "com.example.sms_ash/sms" // Cambia esto para que coincida con tu paquete
+    private val CHANNEL = "com.ash.sms_ash/sms" // Cambia esto para que coincida con tu paquete
     
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
